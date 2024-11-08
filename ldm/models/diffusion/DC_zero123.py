@@ -195,7 +195,7 @@ class DCZeroDiffusion(LatentDiffusion):
             assert 'target' in self.scheduler_config
             scheduler = instantiate_from_config(self.scheduler_config)
 
-            print("Setting up LambdaLR scheduler...")
+            print("Setting up LambdaLR scheduler...Hi")
             scheduler = [
                 {
                     'scheduler': LambdaLR(opt, lr_lambda=scheduler.schedule),

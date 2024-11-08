@@ -13,14 +13,14 @@ from pytorch_lightning.utilities.distributed import rank_zero_only
 from omegaconf import ListConfig
 
 from ldm.util import log_txt_as_img, exists, default, ismap, isimage, mean_flat, count_params, instantiate_from_config, repeat_interleave
-from ldm.modules.ema import LitEma
+# from ldm.modules.ema import LitEma
 from ldm.modules.distributions.distributions import normal_kl, DiagonalGaussianDistribution
 from ldm.models.autoencoder import VQModelInterface, IdentityFirstStage, AutoencoderKL
 from ldm.modules.diffusionmodules.util import make_beta_schedule, extract_into_tensor, noise_like
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.modules.attention import CrossAttention
 
-from ldm.models.planeencoder import PlaneEncoder, PlaneEncoderGridDepthWeighted, PlaneEncoderGridDepthWeightedRecon, PlaneEncoderDepthWeightedRecon, UNetEncoderWeightedRecon, UNetEncoderWeightedReconGrid
+from ldm.models.planeencoder import UNetEncoderWeightedRecon
 from ldm.models.diffusion.ddpm import LatentDiffusion
 
 
@@ -98,18 +98,22 @@ class Lifting_3d(pl.LightningModule):
 
         if self.use_scheduler:
             assert 'target' in self.scheduler_config
-            scheduler = instantiate_from_config(self.scheduler_config)
+            scheduler_instance = instantiate_from_config(self.scheduler_config)
 
-            print("Setting up LambdaLR scheduler...")
+            print("Setting up LambdaLR scheduler...Hi2")
             scheduler = [
                 {
-                    'scheduler': LambdaLR(opt, lr_lambda=scheduler.schedule),
+                    'scheduler': LambdaLR(opt, lr_lambda=scheduler_instance.schedule),
                     'interval': 'step',
                     'frequency': 1
                 }]
             return [opt], scheduler
         return opt
     
+    def lr_scheduler_step(self, scheduler, optimizer_idx, metric):
+        # Call the scheduler's step function to adjust the learning rate
+        scheduler.step()
+
     def get_input(self, batch, k, bs=None, log_images=False):
         x = self.get_input_DF(batch, k)
         Ts = batch['Ts'].to(memory_format=torch.contiguous_format).float() # (bs, 4, 3)

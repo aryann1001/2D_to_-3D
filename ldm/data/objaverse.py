@@ -1,3 +1,4 @@
+# python dc_zero123_training.py \    -t True\     -n lifting_3d \    --base configs/DC_3d_lifting.yaml \    --gpus 1 \    --scale_lr False \    --num_nodes 1 \    --seed 42
 from typing import Dict
 import webdataset as wds
 import numpy as np
@@ -11,7 +12,7 @@ from torchvision import transforms
 import torchvision
 from einops import rearrange
 from ldm.util import instantiate_from_config
-from datasets import load_dataset
+# from datasets import load_dataset
 import pytorch_lightning as pl
 import copy
 import csv
@@ -28,6 +29,8 @@ from ldm.modules.camera import T_blender_to_pinhole, T_to_pose, pose_opengl_to_o
 
 from einops import rearrange
 
+def normalize_transform(x):
+    return rearrange(x * 2. - 1., 'c h w -> h w c')
 
 class ObjaverseDataModuleFromConfig(pl.LightningDataModule):
     def __init__(self, root_dir, batch_size, total_view, train=None, validation=None,
@@ -35,45 +38,86 @@ class ObjaverseDataModuleFromConfig(pl.LightningDataModule):
         super().__init__(self)
         self.root_dir = root_dir
         self.batch_size = batch_size
-        self.num_workers = num_workers
+        self.num_workers = 0
         self.total_view = total_view
 
-        if train is not None:
-            dataset_config = train
-        if validation is not None:
-            dataset_config = validation
+        # Define configurations for datasets
+        self.train_config = train
+        self.validation_config = validation
 
-        if 'image_transforms' in dataset_config:
-            image_transforms = [torchvision.transforms.Resize(dataset_config.image_transforms.size)]
+        # Define transforms
+        if 'image_transforms' in self.train_config:
+            image_transforms = [torchvision.transforms.Resize(self.train_config.image_transforms.size)]
         else:
             image_transforms = []
-        image_transforms.extend([transforms.ToTensor(),
-                                transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c'))])
+        image_transforms.extend([
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c'))
+        ])
         self.image_transforms = torchvision.transforms.Compose(image_transforms)
 
+        # Dictionary to hold all datasets
+        self.datasets = {"train": None, "validation": None, "test": None}
+
+    def prepare_data(self):
+        """
+        Load or initialize the datasets here and store them in the `datasets` dictionary.
+        """
+        # Prepare and store datasets in the dictionary
+        self.datasets["train"] = ObjaverseData(
+            root_dir=self.root_dir, 
+            total_view=self.total_view, 
+            validation=False, 
+            image_transforms=self.image_transforms
+        )
+        self.datasets["validation"] = ObjaverseData(
+            root_dir=self.root_dir, 
+            total_view=self.total_view, 
+            validation=True, 
+            image_transforms=self.image_transforms
+        )
+        self.datasets["test"] = ObjaverseData(
+            root_dir=self.root_dir, 
+            total_view=self.total_view, 
+            validation=True, 
+            image_transforms=self.image_transforms
+        )
 
     def train_dataloader(self):
-        dataset = ObjaverseData(root_dir=self.root_dir, total_view=self.total_view, validation=False, \
-                                image_transforms=self.image_transforms)
-        sampler = DistributedSampler(dataset)
-        return torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=False, sampler=sampler)
-        # return wds.WebLoader(dataset, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=False, sampler=sampler)
+        sampler = DistributedSampler(self.datasets["train"])
+        return torch.utils.data.DataLoader(
+            self.datasets["train"], 
+            batch_size=self.batch_size, 
+            num_workers=self.num_workers, 
+            shuffle=False, 
+            sampler=sampler
+        )
 
     def val_dataloader(self):
-        dataset = ObjaverseData(root_dir=self.root_dir, total_view=self.total_view, validation=True, \
-                                image_transforms=self.image_transforms)
-        sampler = DistributedSampler(dataset)
-        return torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=False, sampler=sampler)
-        # return wds.WebLoader(dataset, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=False)
-    
+        sampler = DistributedSampler(self.datasets["validation"])
+        return torch.utils.data.DataLoader(
+            self.datasets["validation"], 
+            batch_size=self.batch_size, 
+            num_workers=self.num_workers, 
+            shuffle=False, 
+            sampler=sampler
+        )
+
     def test_dataloader(self):
-        return wds.WebLoader(ObjaverseData(root_dir=self.root_dir, total_view=self.total_view, validation=self.validation),\
-                          batch_size=self.batch_size, num_workers=self.num_workers, shuffle=False)
+        sampler = DistributedSampler(self.datasets["test"])
+        return torch.utils.data.DataLoader(
+            self.datasets["test"], 
+            batch_size=self.batch_size, 
+            num_workers=self.num_workers, 
+            shuffle=False, 
+            sampler=sampler
+        )
+
 
 
 class ObjaverseData(Dataset):
     def __init__(self,
-        root_dir='.objaverse/hf-objaverse-v1/views',
+        root_dir='../dataset/',
         image_transforms=[],
         ext="png",
         default_trans=torch.zeros(3),
@@ -195,7 +239,7 @@ class ObjaverseData(Dataset):
         return cond_pose_list_new
 
     def __getitem__(self, index):
-        # print(index)
+        print(index)
 
         data = {}
         total_view = 72
@@ -218,10 +262,9 @@ class ObjaverseData(Dataset):
         valid_num = 3
         
         filename = self.paths[index]
+        # print(self.paths[index])
         with open(os.path.join(filename, 'meta.json'), 'r') as file:
             meta_data = json.load(file)
-
-        # print(self.paths[index])
 
         if self.return_paths:
             data["path"] = str(filename)

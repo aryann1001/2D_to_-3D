@@ -42,7 +42,7 @@ def get_parser(**parser_kwargs):
     parser.add_argument("-s", "--seed", type=int, default=6033, help="seed for seed_everything", )
     parser.add_argument("--finetune_from", type=str, default="", help="path to checkpoint to load model state from" )
     parser.add_argument("--lift3d_ckpt", type=str, default="", help="path to checkpoint to load lift3d state from" )
-    parser.add_argument("--gpus", type=str, default='0,')
+    parser.add_argument("--gpus", type=str, default='1,')
     return parser
 
 def trainer_args(opt):

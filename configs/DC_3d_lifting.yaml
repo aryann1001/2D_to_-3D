@@ -1,6 +1,6 @@
 model:
   base_learning_rate: 1.0e-04
-  target: ldm.models.diffusion.triplane_trainer.Lifting_3d
+  target: ldm.models.diffusion.DC_3d_lifting_trainer.Lifting_3d
   params:
 
     scheduler_config: # 10000 warmup steps
@@ -55,7 +55,7 @@ model:
 data:
   target: ldm.data.objaverse.ObjaverseDataModuleFromConfig
   params:
-    root_dir: ''  # The root of rendering data
+    root_dir: '../dataset/'  # The root of rendering data
     batch_size: 72
     num_workers: 16
     total_view: 12
@@ -78,7 +78,7 @@ lightning:
       every_n_train_steps: 5000
   callbacks:
     image_logger:
-      target: main.ImageLogger
+      target: __main__.ImageLogger
       params:
         batch_frequency: 500
         max_images: 32
@@ -87,7 +87,7 @@ lightning:
 
   trainer:
     benchmark: True
-    val_check_interval: 500
+    val_check_interval: 10
     num_sanity_val_steps: 0
     accumulate_grad_batches: 1
-    max_epochs: 50000
+    max_epochs: 10

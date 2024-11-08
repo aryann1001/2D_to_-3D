@@ -144,4 +144,4 @@ lightning:
     # limit_val_batches: 0.0
     num_sanity_val_steps: 0
     accumulate_grad_batches: 1
-    max_epochs: 50000
+    max_epochs: 10
